@@ -13,8 +13,7 @@ use tokio::{
 
 pub trait EventKind = Debug + Clone + Send;
 pub trait ConvertFn<Event: EventKind> = Fn(event::Event) -> Option<Event> + Send + Sync + 'static;
-pub trait StateFn<Event: EventKind> =
-    FnMut(Event) -> Result<bool, io::Error> + Sync + Send + 'static;
+pub trait StateFn<Event: EventKind> = FnMut(Event) -> Result<bool, io::Error> + Sync + Send + 'static;
 pub trait RenderFn = Fn() -> Result<(), io::Error> + Sync + Send + 'static;
 
 #[derive(Debug)]
@@ -42,13 +41,20 @@ impl<T: EventKind> From<io::Error> for Error<T> {
     }
 }
 
-pub async fn jk_tui_main<Event: EventKind + 'static>(
+pub async fn tui_main<Event: EventKind + 'static>(
+    convert: impl ConvertFn<Event>,
+    statefn: impl StateFn<Event>,
+) {
+    tui_main_render(convert, statefn, None).await
+}
+
+pub async fn tui_main_render<Event: EventKind + 'static>(
     convert: impl ConvertFn<Event>,
     mut statefn: impl StateFn<Event>,
+    renderfn: Option<Box<dyn RenderFn>>,
 ) {
     let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
     let (tx, mut rx) = broadcast::channel(16);
-    let renderfn: Option<Box<dyn RenderFn>> = None;
 
     let threads = vec![
         tokio::spawn(async move {
